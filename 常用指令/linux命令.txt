@@ -1,0 +1,45 @@
+
+//编译mbr和load程序到磁盘
+nasm -o mbr.bin mbr
+dd if=mbr.bin of=hd60M.img bs=512 count=1 conv=notrunc
+nasm -o load.bin loader.S
+dd if=load.bin of=hd60M.img bs=512 count=3 seek=2 conv=notrunc
+
+//指定配置文件,启动bochs
+./bin/bochs -f ./bin/pz
+
+//编译和写入内核文件到磁盘。
+gcc -m32 -c -o ./Kernel/kernel.o ./Kernel/kernel.c
+ld -m elf_i386 ./Kernel/kernel.o -Ttext 0xc0001500 -e main -o ./Kernel/kernel.bin 
+dd if=./Kernel/kernel.bin of=hd60M.img bs=512 count=200 seek=9 conv=notrunc
+
+gcc -m32 -fno-builtin -c -o ./bin/kernel/bitmap.o ./bin/kernel/bitmap.c
+
+//杂项
+xp /768wx 0x100000
+xp /769wx 0x000000100000
+x /10bx 0xc009efbc
+string 0xc009efbc
+b 0x0000c0f
+vb 0008:0xc0001500
+所在位置:bochs文件夹,根目录
+//编译print
+//编译kernel main.c
+//链接汇编文件和c文件
+//写入磁盘文件
+nasm -f elf -o ./bin/lib/kernel/print.o ./bin/lib/kernel/print.S
+nasm -f elf -o ./bin/kernel/kernel.o ./bin/kernel/kernel.s
+gcc -m32 -fno-builtin -c -o ./bin/kernel/main.o ./bin/kernel/main.c
+gcc -m32 -fno-builtin -c -o ./bin/kernel/init.o ./bin/kernel/init.c
+gcc -m32 -fno-builtin -c -o ./bin/kernel/interrupt.o ./bin/kernel/interrupt.c
+gcc -m32 -fno-builtin -c -o ./bin/device/timer.o ./bin/device/timer.c
+ld -m elf_i386 -Ttext 0xc0001500 -e main -o kernel.bin ./bin/kernel/main.o ./bin/lib/kernel/print.o ./bin/kernel/interrupt.o ./bin/kernel/kernel.o ./bin/kernel/init.o ./bin/device/timer.o
+dd if=./kernel.bin of=./bin/hd60M.img bs=512 count=200 seek=9 conv=notrunc
+
+
+
+
+
+
+
+

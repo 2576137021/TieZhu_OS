@@ -1,0 +1,13 @@
+./configure \
+--prefix=/home/admin1/bochs \
+--enable-debugger \
+--enable-disasm \
+--enable-iodebug \
+--enable-x86-debugger \
+--with-x \
+--with-x11
+
+LDFLAGS='-pthread' \
+/home/admin1/bochs/share/bochs/BIOS-bochs-latest
+/home/admin1/bochs/share/bochs/VGABIOS-lgpl-latest
+keyboard:keymap=/home/admin1/bochs/share/bochs/keymaps/x11-pc-us.map

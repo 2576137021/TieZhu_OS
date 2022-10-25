@@ -1,0 +1,124 @@
+;初始化所有中断处理程序
+
+;如果cpu自动压入错误代码,则什么都不做
+%define PUSH_ZERO push 0
+ ;如果cpu不压入错误代码,则手动压入0,保证栈结构相同
+%define NO_PUSH nop
+extern print 
+extern put_int32
+extern idt_table 
+global intr_entry_table
+section .data
+    print_str db "interrupt occur",0xa,0
+[bits 32]
+intr_entry_table:
+;因为编译器会组合相同属性的段,所以后面.data所有(中断方法的起始地址)会被保存在这里
+;定义中断处理程式模板
+%macro INTERRUPT_VECTOR_FUNCTION 2
+section .text
+intr%1entry:
+    %2 ;传入的宏定义
+    push ds
+    push es
+    push fs
+    push gs
+    pushad
+
+    ;发送EOI(结束中断请求)主片和从片都发送  坑.一定要写在中断处理程序之前,不然无法结束中断,8259a将不会再发送中断请求,导致线程无法切换
+    mov al,0x20
+    out 0xa0,al
+    out 0x20,al
+
+    push %1
+    call [idt_table+%1*4] ;idt_table是interrupt.c中的中断处理程序数组
+    
+    jmp intr_exit 
+section .data
+    dd intr%1entry   ;与程序标号相同,此处被编译后存放对应中断向量的程式地址
+%endmacro
+section .text
+global intr_exit
+intr_exit: ;写在外面是预留给创建用户进程使用,避免打乱 intr_entry_table 数组
+    add esp,4
+    popad
+    pop gs
+    pop fs
+    pop es
+    pop ds
+    add esp,4 ;跳过ERROR_CODE
+    iret ;从中断返回
+INTERRUPT_VECTOR_FUNCTION 0x0 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X1 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X2 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0x3 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X4 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X5 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0x6 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X7 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X8 ,NO_PUSH
+INTERRUPT_VECTOR_FUNCTION 0x9 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0XA ,NO_PUSH
+INTERRUPT_VECTOR_FUNCTION 0XB ,NO_PUSH
+INTERRUPT_VECTOR_FUNCTION 0XC ,NO_PUSH
+INTERRUPT_VECTOR_FUNCTION 0XD ,NO_PUSH
+INTERRUPT_VECTOR_FUNCTION 0XE ,NO_PUSH
+INTERRUPT_VECTOR_FUNCTION 0XF ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X10 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X11 ,NO_PUSH
+INTERRUPT_VECTOR_FUNCTION 0x12 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X13 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X14 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0x15 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X16 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X17 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X18 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X19 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X1A ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X1B ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X1C ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X1D ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X1E ,NO_PUSH                               
+INTERRUPT_VECTOR_FUNCTION 0X1F ,PUSH_ZERO
+;外部中断
+INTERRUPT_VECTOR_FUNCTION 0X20 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X21 ,PUSH_ZERO;键盘中断
+INTERRUPT_VECTOR_FUNCTION 0X22 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X23 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X24 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X25 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X26 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X27 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X28 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X29 ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X2a ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X2b ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X2c ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X2d ,PUSH_ZERO
+INTERRUPT_VECTOR_FUNCTION 0X2e ,PUSH_ZERO;硬盘中断
+INTERRUPT_VECTOR_FUNCTION 0X2f ,PUSH_ZERO
+
+;定义 0x80 号中断,用于处理系统调用
+[bits 32]
+extern syscall_table 
+global syscall_handler 
+section .text
+syscall_handler:
+push 0
+
+push ds
+push es
+push fs
+push gs
+pushad ;eax ecx edx ebx esp ebp esi edi
+
+push 0x80 
+
+push edx  ;入栈三个参数
+push ecx
+push ebx
+
+call [syscall_table + eax*4];根据eax中存储的功能号在syscall_table中定位
+add esp,12
+
+mov [esp+8*4],eax ;用返回值覆盖栈中保存的eax的值
+jmp intr_exit
